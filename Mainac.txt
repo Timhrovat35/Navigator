@@ -1,0 +1,199 @@
+package com.example.myapplication;
+
+import android.Manifest;
+import android.annotation.SuppressLint;
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.location.Location;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.view.animation.Animation;
+import android.view.animation.RotateAnimation;
+import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
+import com.google.android.gms.location.LocationServices;
+
+import androidx.appcompat.app.AppCompatActivity;
+
+import java.io.Console;
+
+public class MainActivity extends AppCompatActivity {
+
+    private static final int LOCATION_PERMISSION_REQUEST_CODE = 1;
+    private FusedLocationProviderClient fusedLocationClient;
+    private LocationRequest locationRequest;
+    private LocationCallback locationCallback;
+    private Location startLocation;
+    private float totalDistance = 0.0f;
+
+    private Button saveButton;
+    private Button findButton;
+    private Button cancelButton;
+
+    private SensorManager sensorManager;
+    private Sensor orientationSensor;
+    private float currentDegree = 0f;
+    private ImageView compassImageView;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        orientationSensor = sensorManager.getDefaultSensor(Sensor.TYPE_ORIENTATION);
+        compassImageView = findViewById(R.id.compassImageView);
+
+        saveButton = findViewById(R.id.saveButton);
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this);
+        createLocationRequest();
+        createLocationCallback();
+
+        saveButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                checkLocationPermission();
+            }
+        });
+    }
+    private void createLocationRequest() {
+        locationRequest = LocationRequest.create();
+        locationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+        locationRequest.setInterval(4000); // Update location every 10 seconds
+    }
+
+    private void createLocationCallback() {
+        locationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                if (locationResult == null) {
+                    return;
+                }
+                for (Location location : locationResult.getLocations()) {
+                    saveCoordinates(location.getLatitude(), location.getLongitude());
+                    Log.d("SaveLocation", "HELLO");
+                }
+            }
+        };
+    }
+    private void saveCoordinates(double latitude, double longitude) {
+        // Create a new Location object with the current latitude and longitude
+        Location currentLocation = new Location("");
+        currentLocation.setLatitude(latitude);
+        currentLocation.setLongitude(longitude);
+        Log.d("SaveLocation", "Total distance: " + totalDistance + " KORDINATE");
+
+
+        // Check if it's the first location update to set the start location
+        if (startLocation == null) {
+            startLocation = currentLocation;
+            Log.d("SaveLocation", "starting location: " + startLocation + " KORDINATE");
+            // Navigate to find_location.xml
+
+        } else {
+            // Calculate the distance between the current location and the start location
+            float distance = startLocation.distanceTo(currentLocation);
+
+            // Update the total distance
+            totalDistance = distance;
+        }
+        float bearing = startLocation.bearingTo(currentLocation);
+        ImageView compassImageView = findViewById(R.id.compassImageView);
+        if (compassImageView != null) {
+            compassImageView.setRotation(bearing);
+            Log.d("SaveLocation", "Total distance: " + totalDistance + " metersssssssssssssssssssssssssssssssss");
+        }
+
+        // Save the current coordinates and total distance
+        Log.d("SaveLocation", "Latitude: " + latitude + ", Longitude: " + longitude);
+        Log.d("SaveLocation", "Total distance: " + totalDistance + " meters");
+        Toast.makeText(this,"Starting location:" + startLocation.getLatitude() + ",  " + startLocation.getLongitude() + "\nCoordinates saved: " + latitude + ", " + longitude
+                + "\nTotal distance: " + totalDistance + " meters", Toast.LENGTH_SHORT).show();
+    }
+    private void checkLocationPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            // Permission is not granted, request it
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                    LOCATION_PERMISSION_REQUEST_CODE);
+        } else {
+            // Permission already granted, start location updates
+            startLocationUpdates();
+            Log.d("SaveLocation", "Total distance: " + totalDistance + " metersasdasdasdasdasdasd");
+            setContentView(R.layout.find_location);
+            findButton = findViewById(R.id.findButton);
+            findButton.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    setContentView(R.layout.navigation);
+                    cancelButton = findViewById(R.id.cancelButton);
+                    cancelButton.setOnClickListener(new View.OnClickListener() {
+                        public void onClick(View v) {
+                            // Stop location updates
+                            fusedLocationClient.removeLocationUpdates(locationCallback);
+                            setContentView(R.layout.activity_main);
+                            saveButton = findViewById(R.id.saveButton);
+                            startLocation= null;
+                            saveButton.setOnClickListener(new View.OnClickListener() {
+                                public void onClick(View v) {
+                                    checkLocationPermission();
+                                }
+                            });
+                        }
+                    });
+                    TextView distanceTextView = findViewById(R.id.distanceTextView);
+                    if (distanceTextView != null) {
+                        distanceTextView.setText("Total distance: " + totalDistance + " meters");
+                    }
+                }
+            });
+
+        }
+    }
+    private void startLocationUpdates() {
+        // Check if the permission is granted
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                == PackageManager.PERMISSION_GRANTED) {
+            fusedLocationClient.requestLocationUpdates(locationRequest, locationCallback, null);
+        } else {
+            // Permission is not granted
+            Toast.makeText(this, "Location permission denied", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == LOCATION_PERMISSION_REQUEST_CODE) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Location permission granted, start location updates
+                startLocationUpdates();
+            } else {
+                // Location permission denied
+                Toast.makeText(this, "Location permission denied", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        // Stop location updates when the activity is destroyed
+        fusedLocationClient.removeLocationUpdates(locationCallback);
+    }
+}
